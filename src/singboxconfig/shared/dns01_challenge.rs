@@ -14,7 +14,9 @@ pub enum Dns01Challenge {
     #[serde(rename = "alidns")]
     AliDns(AliDnsConfig),
 
-    /// Cloudflare DNSCloudflare(CloudflareConfig),
+    /// Cloudflare DNS
+    #[serde(rename = "cloudflare")]
+    Cloudflare(CloudflareConfig),
 }
 
 //============================================================================
