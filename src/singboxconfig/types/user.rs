@@ -87,6 +87,72 @@ impl Default for VMessUser {
 }
 
 // ============================================================================
+// TUIC 用户类型
+// ============================================================================
+
+/// TUIC 用户
+/// TUIC 协议使用 UUID 和密码进行身份验证
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]
+pub struct TuicUser {
+    /// 用户名
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub name: Option<String>,
+
+    /// 用户 UUID（必填）
+    pub uuid: String,
+
+    /// 用户密码
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub password: Option<String>,
+}
+
+impl TuicUser {
+    /// 创建新的 TUIC 用户（仅 UUID）
+    pub fn new(uuid: impl Into<String>) -> Self {
+        Self {
+            name: None,
+            uuid: uuid.into(),
+            password: None,
+        }
+    }
+
+    /// 创建带名称和密码的 TUIC 用户
+    pub fn with_credentials(
+        name: impl Into<String>,
+        uuid: impl Into<String>,
+        password: impl Into<String>,
+    ) -> Self {
+        Self {
+            name: Some(name.into()),
+            uuid: uuid.into(),
+            password: Some(password.into()),
+        }
+    }
+
+    /// 设置用户名
+    pub fn with_name(mut self, name: impl Into<String>) -> Self {
+        self.name = Some(name.into());
+        self
+    }
+
+    /// 设置密码
+    pub fn with_password(mut self, password: impl Into<String>) -> Self {
+        self.password = Some(password.into());
+        self
+    }
+}
+
+impl Default for TuicUser {
+    fn default() -> Self {
+        Self {
+            name: None,
+            uuid: String::new(),
+            password: None,
+        }
+    }
+}
+
+// ============================================================================
 // Shadowsocks 中继目标
 // ============================================================================
 

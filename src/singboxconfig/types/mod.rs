@@ -14,4 +14,4 @@ pub use duration::{Duration, ParseDurationError};
 pub use network_strategy::{NetworkStrategy, NetworkType};
 pub use routing_mark::RoutingMark;
 pub use string_or_array::StringOrArray;
-pub use user::{ShadowsocksDestination, UserWithPassword, VMessUser};
+pub use user::{ShadowsocksDestination, TuicUser, UserWithPassword, VMessUser};
