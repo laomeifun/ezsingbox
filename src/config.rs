@@ -172,7 +172,11 @@ pub fn build_proxy_outbound_json(
                 "server": domain,
                 "server_port": hy2.info.port,
                 "password": user.password,
-                "tls": tls
+                "tls": {
+                    "enabled": true,
+                    "server_name": domain,
+                    "alpn": ["h3"]
+                }
             });
 
             if env_bool("EZ_HY2_OBFS", false) {

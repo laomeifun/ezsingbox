@@ -618,10 +618,18 @@ impl AutoDefault {
             .clone()
             .unwrap_or_else(|| Protocol::Hysteria2.default_tag().to_string());
         let users = self.generate_users();
-        let tls = self.generate_tls_config(&domain, self.acme_email.clone());
+        let mut tls = self.generate_tls_config(&domain, self.acme_email.clone());
+        // hy2 建议使用 HTTP/3 的 ALPN
+        tls.alpn = Some(vec!["h3".to_string()]);
+        // 若非 443 端口，尽量设置 ACME 的备用 TLS 端口（需系统将 443 转发到该端口）
+        if let Some(ref mut acme) = tls.acme {
+            if port != 443 {
+                acme.alternative_tls_port = Some(port);
+            }
+        }
 
         let mut inbound = Hysteria2Inbound::new(&tag)
-            .with_listen("::")
+            .with_listen("0.0.0.0")
             .with_listen_port(port)
             .with_tls(tls);
 

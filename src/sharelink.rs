@@ -37,7 +37,7 @@ pub fn generate_hysteria2_share_link(
     name: &str,
     obfs_password: Option<&str>,
 ) -> String {
-    let mut params = format!("sni={}&insecure=0", percent_encode(sni));
+    let mut params = format!("sni={}&insecure=0&alpn=h3", percent_encode(sni));
     if let Some(obfs_pwd) = obfs_password {
         params.push_str(&format!(
             "&obfs=salamander&obfs-password={}",
