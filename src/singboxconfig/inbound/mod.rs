@@ -5,9 +5,11 @@
 mod anytls;
 mod hysteria2;
 mod tuic;
+mod vless;
 
 pub use anytls::AnyTlsInbound;
 pub use hysteria2::{
     Hysteria2Inbound, Hysteria2Masquerade, Hysteria2MasqueradeConfig, Hysteria2Obfs, MasqueradeType,
 };
 pub use tuic::{CongestionControl, TuicInbound};
+pub use vless::{VlessFlow, VlessInbound, VlessUser};

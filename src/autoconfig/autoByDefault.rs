@@ -12,13 +12,17 @@
 use std::net::IpAddr;
 
 use crate::singboxconfig::inbound::{
-    AnyTlsInbound, CongestionControl, Hysteria2Inbound, TuicInbound,
+    AnyTlsInbound, CongestionControl, Hysteria2Inbound, TuicInbound, VlessFlow, VlessInbound,
+    VlessUser,
 };
-use crate::singboxconfig::shared::{AcmeConfig, InboundTlsConfig};
-use crate::singboxconfig::types::{TuicUser, UserWithPassword};
+use crate::singboxconfig::shared::{
+    AcmeConfig, InboundTlsConfig, RealityHandshake, RealityInboundConfig,
+};
+use crate::singboxconfig::types::TuicUser;
 
 use super::tools::{
-    PublicIpError, generate_password, generate_sslip_domain, generate_uuid, get_public_ip,
+    PublicIpError, generate_hex_string, generate_password, generate_sslip_domain, generate_uuid,
+    get_public_ip,
 };
 
 //============================================================================
@@ -52,6 +56,8 @@ pub enum Protocol {
     Hysteria2,
     /// TUIC 协议
     Tuic,
+    /// VLESS-Vision-uTLS-REALITY 协议
+    VlessReality,
 }
 
 impl Protocol {
@@ -61,6 +67,7 @@ impl Protocol {
             Protocol::AnyTls => "anytls-in",
             Protocol::Hysteria2 => "hy2-in",
             Protocol::Tuic => "tuic-in",
+            Protocol::VlessReality => "vless-reality-in",
         }
     }
 }
@@ -168,6 +175,65 @@ pub struct TuicAutoResult {
     pub inbound: TuicInbound,
 }
 
+/// VLESS-Vision-uTLS-REALITY 自动配置结果
+#[derive(Debug)]
+pub struct VlessRealityAutoResult {
+    /// 基础信息
+    pub info: AutoDefaultResult,
+    /// 生成的入站配置
+    pub inbound: VlessInbound,
+    /// REALITY 私钥（服务端使用）
+    pub private_key: String,
+    /// REALITY 公钥（客户端使用）
+    pub public_key: String,
+    /// REALITY 短 ID
+    pub short_id: String,
+    /// 握手服务器地址
+    pub handshake_server: String,
+    /// 握手服务器端口
+    pub handshake_port: u16,
+}
+
+/// REALITY 密钥对
+#[derive(Debug, Clone)]
+pub struct RealityKeyPair {
+    /// 私钥（Base64 编码）
+    pub private_key: String,
+    /// 公钥（Base64 编码）
+    pub public_key: String,
+}
+
+/// 生成 REALITY 密钥对
+/// 注意：这是一个简化实现，生产环境建议使用 `sing-box generate reality-keypair`
+pub fn generate_reality_keypair() -> RealityKeyPair {
+    use base64::{Engine, engine::general_purpose::URL_SAFE_NO_PAD};
+    use rand::RngCore;
+
+    // 生成 32 字节的随机私钥
+    let mut private_key_bytes = [0u8; 32];
+    rand::rng().fill_bytes(&mut private_key_bytes);
+
+    // X25519 密钥生成
+    // 按照 X25519 规范处理私钥
+    private_key_bytes[0] &= 248;
+    private_key_bytes[31] &= 127;
+    private_key_bytes[31] |= 64;
+
+    // 使用 x25519_dalek 计算公钥
+    let private_key = x25519_dalek::StaticSecret::from(private_key_bytes);
+    let public_key = x25519_dalek::PublicKey::from(&private_key);
+
+    RealityKeyPair {
+        private_key: URL_SAFE_NO_PAD.encode(private_key_bytes),
+        public_key: URL_SAFE_NO_PAD.encode(public_key.as_bytes()),
+    }
+}
+
+/// 生成 REALITY 短 ID（8位十六进制）
+pub fn generate_short_id() -> String {
+    generate_hex_string(4) // 4 bytes = 8 hex chars
+}
+
 /// 多协议自动配置结果
 #[derive(Debug)]
 pub struct MultiProtocolResult {
@@ -181,6 +247,8 @@ pub struct MultiProtocolResult {
     pub hysteria2: Option<Hysteria2AutoResult>,
     /// TUIC 配置（如果启用）
     pub tuic: Option<TuicAutoResult>,
+    /// VLESS-Reality 配置（如果启用）
+    pub vless_reality: Option<VlessRealityAutoResult>,
 }
 
 //============================================================================
@@ -263,6 +331,12 @@ pub struct AutoDefault {
     masquerade_url: Option<String>,
     /// TUIC 特有：拥塞控制算法
     congestion_control: Option<CongestionControl>,
+    /// VLESS Reality 特有：握手服务器
+    reality_handshake_server: Option<String>,
+    /// VLESS Reality 特有：握手服务器端口
+    reality_handshake_port: Option<u16>,
+    /// VLESS Reality 特有：服务器名称（SNI）
+    reality_server_name: Option<String>,
 }
 
 impl AutoDefault {
@@ -281,6 +355,11 @@ impl AutoDefault {
         Self::new(Protocol::Tuic)
     }
 
+    /// 创建 VLESS-Vision-uTLS-REALITY 自动配置
+    pub fn vless_reality() -> Self {
+        Self::new(Protocol::VlessReality)
+    }
+
     /// 创建指定协议的自动配置
     fn new(protocol: Protocol) -> Self {
         Self {
@@ -295,6 +374,9 @@ impl AutoDefault {
             enable_obfs: false,
             masquerade_url: None,
             congestion_control: None,
+            reality_handshake_server: None,
+            reality_handshake_port: None,
+            reality_server_name: None,
         }
     }
 
@@ -334,9 +416,9 @@ impl AutoDefault {
         self
     }
 
-    /// 添加用户（自动生成密码）
+    /// 添加用户（自动生成密码/UUID）
     pub fn add_user(mut self, name: impl Into<String>) -> Self {
-        let user = if self.protocol == Protocol::Tuic {
+        let user = if self.protocol == Protocol::Tuic || self.protocol == Protocol::VlessReality {
             GeneratedUser::with_uuid(name)
         } else {
             GeneratedUser::new(name)
@@ -352,7 +434,7 @@ impl AutoDefault {
         password: impl Into<String>,
     ) -> Self {
         let mut user = GeneratedUser::with_password(name, password);
-        if self.protocol == Protocol::Tuic {
+        if self.protocol == Protocol::Tuic || self.protocol == Protocol::VlessReality {
             user.uuid = Some(generate_uuid());
         }
         self.users.push(user);
@@ -412,6 +494,23 @@ impl AutoDefault {
         self
     }
 
+    // ========== VLESS Reality 特有方法 ==========
+
+    /// 设置 REALITY 握手服务器（VLESS Reality）
+    /// 默认使用 www.microsoft.com:443
+    pub fn handshake_server(mut self, server: impl Into<String>, port: u16) -> Self {
+        self.reality_handshake_server = Some(server.into());
+        self.reality_handshake_port = Some(port);
+        self
+    }
+
+    /// 设置 REALITY 服务器名称/SNI（VLESS Reality）
+    /// 默认使用握手服务器地址
+    pub fn server_name(mut self, name: impl Into<String>) -> Self {
+        self.reality_server_name = Some(name.into());
+        self
+    }
+
     // ========== 构建方法 ==========
 
     /// 获取或自动检测公网 IP
@@ -442,7 +541,8 @@ impl AutoDefault {
     /// 生成用户列表（如果为空则生成默认用户）
     fn generate_users(&self) -> Vec<GeneratedUser> {
         if self.users.is_empty() {
-            let user = if self.protocol == Protocol::Tuic {
+            let user = if self.protocol == Protocol::Tuic || self.protocol == Protocol::VlessReality
+            {
                 GeneratedUser::with_uuid("default")
             } else {
                 GeneratedUser::new("default")
@@ -586,12 +686,103 @@ impl AutoDefault {
         })
     }
 
+    /// 构建 VLESS-Vision-uTLS-REALITY 配置
+    pub fn build_vless_reality(self) -> Result<VlessRealityAutoResult, AutoDefaultError> {
+        let public_ip = self.get_public_ip()?;
+        let port = self.port.unwrap_or_else(default_port);
+        let tag = self
+            .tag
+            .clone()
+            .unwrap_or_else(|| Protocol::VlessReality.default_tag().to_string());
+        let users = self.generate_users();
+
+        // REALITY 配置
+        let handshake_server = self
+            .reality_handshake_server
+            .clone()
+            .unwrap_or_else(|| "www.microsoft.com".to_string());
+        let handshake_port = self.reality_handshake_port.unwrap_or(443);
+        let server_name = self
+            .reality_server_name
+            .clone()
+            .unwrap_or_else(|| handshake_server.clone());
+
+        // 生成 REALITY 密钥对
+        let keypair = generate_reality_keypair();
+        let short_id = generate_short_id();
+
+        // 构建 REALITY TLS 配置
+        let reality_config = RealityInboundConfig {
+            enabled: Some(true),
+            handshake: Some(RealityHandshake {
+                server: handshake_server.clone(),
+                server_port: Some(handshake_port),
+                bind_interface: None,
+                inet4_bind_address: None,
+                inet6_bind_address: None,
+                routing_mark: None,
+                reuse_addr: None,
+                netns: None,
+                connect_timeout: None,
+                tcp_fast_open: None,
+                tcp_multi_path: None,
+                udp_fragment: None,
+                domain_strategy: None,
+                fallback_delay: None,
+            }),
+            private_key: Some(keypair.private_key.clone()),
+            short_id: Some(vec![short_id.clone()]),
+            max_time_difference: None,
+        };
+
+        let tls_config = InboundTlsConfig {
+            enabled: Some(true),
+            server_name: Some(server_name),
+            reality: Some(reality_config),
+            ..Default::default()
+        };
+
+        // 构建入站配置
+        let mut inbound = VlessInbound::new(&tag)
+            .with_listen("::")
+            .with_listen_port(port)
+            .with_tls(tls_config);
+
+        // 添加用户（带XTLS Vision flow）
+        for user in &users {
+            let uuid = user.uuid.clone().unwrap_or_else(generate_uuid);
+            let vless_user = VlessUser::new(&user.name, &uuid).with_xtls_vision();
+            inbound = inbound.add_user(vless_user);
+        }
+
+        // 使用公网 IP 作为域名（REALITY 不需要真实域名）
+        let domain = public_ip.to_string();
+
+        Ok(VlessRealityAutoResult {
+            info: AutoDefaultResult {
+                public_ip,
+                domain,
+                port,
+                users,
+            },
+            inbound,
+            private_key: keypair.private_key,
+            public_key: keypair.public_key,
+            short_id,
+            handshake_server,
+            handshake_port,
+        })
+    }
+
     /// 根据协议类型自动构建
     pub fn build(self) -> Result<AutoBuildResult, AutoDefaultError> {
         match self.protocol {
             Protocol::AnyTls => Ok(AutoBuildResult::AnyTls(self.build_anytls()?)),
             Protocol::Hysteria2 => Ok(AutoBuildResult::Hysteria2(self.build_hysteria2()?)),
             Protocol::Tuic => Ok(AutoBuildResult::Tuic(self.build_tuic()?)),
+            Protocol::VlessReality => {
+                Ok(AutoBuildResult::VlessReality(self.build_vless_reality()?))
+            }
         }
     }
 }
@@ -605,6 +796,8 @@ pub enum AutoBuildResult {
     Hysteria2(Hysteria2AutoResult),
     /// TUIC 结果
     Tuic(TuicAutoResult),
+    /// VLESS-Reality 结果
+    VlessReality(VlessRealityAutoResult),
 }
 
 //============================================================================
@@ -638,12 +831,16 @@ pub struct MultiProtocolBuilder {
     hysteria2_port: Option<u16>,
     /// TUIC 端口
     tuic_port: Option<u16>,
+    /// VLESS Reality 端口
+    vless_reality_port: Option<u16>,
     /// Hysteria2 带宽
     hy2_bandwidth: Option<(u32, u32)>,
     /// Hysteria2 混淆
     hy2_obfs: bool,
     /// TUIC 拥塞控制
     tuic_cc: Option<CongestionControl>,
+    /// VLESS Reality 握手服务器
+    vless_handshake: Option<(String, u16)>,
 }
 
 impl MultiProtocolBuilder {
@@ -656,9 +853,11 @@ impl MultiProtocolBuilder {
             anytls_port: None,
             hysteria2_port: None,
             tuic_port: None,
+            vless_reality_port: None,
             hy2_bandwidth: None,
             hy2_obfs: false,
             tuic_cc: None,
+            vless_handshake: None,
         }
     }
 
@@ -692,11 +891,24 @@ impl MultiProtocolBuilder {
         self
     }
 
+    /// 启用 VLESS-Reality
+    pub fn enable_vless_reality(mut self, port: u16) -> Self {
+        self.vless_reality_port = Some(port);
+        self
+    }
+
+    /// 设置 VLESS Reality 握手服务器
+    pub fn vless_handshake(mut self, server: impl Into<String>, port: u16) -> Self {
+        self.vless_handshake = Some((server.into(), port));
+        self
+    }
+
     /// 启用所有协议（使用默认端口）
     pub fn enable_all(mut self) -> Self {
         self.anytls_port = Some(DEFAULT_PORTS[0]); // 443
         self.hysteria2_port = Some(DEFAULT_PORTS[1]); // 2053
         self.tuic_port = Some(DEFAULT_PORTS[2]); // 2083
+        self.vless_reality_port = Some(DEFAULT_PORTS[3]); // 2096
         self
     }
 
@@ -813,12 +1025,31 @@ impl MultiProtocolBuilder {
             None
         };
 
+        // 构建 VLESS Reality
+        let vless_reality = if let Some(port) = self.vless_reality_port {
+            let mut builder = AutoDefault::vless_reality().public_ip(public_ip).port(port);
+            for user in &users {
+                if let Some(ref uuid) = user.uuid {
+                    builder = builder.add_tuic_user(&user.name, uuid, &user.password);
+                } else {
+                    builder = builder.add_user(&user.name);
+                }
+            }
+            if let Some((server, hs_port)) = &self.vless_handshake {
+                builder = builder.handshake_server(server, *hs_port);
+            }
+            Some(builder.build_vless_reality()?)
+        } else {
+            None
+        };
+
         Ok(MultiProtocolResult {
             public_ip,
             domain,
             anytls,
             hysteria2,
             tuic,
+            vless_reality,
         })
     }
 }
@@ -851,6 +1082,11 @@ pub fn quick_tuic() -> Result<TuicAutoResult, AutoDefaultError> {
 /// 快速创建所有协议配置（完全自动化）
 pub fn quick_all() -> Result<MultiProtocolResult, AutoDefaultError> {
     MultiProtocolBuilder::new().enable_all().build()
+}
+
+/// 快速创建 VLESS-Reality 配置（完全自动化）
+pub fn quick_vless_reality() -> Result<VlessRealityAutoResult, AutoDefaultError> {
+    AutoDefault::vless_reality().build_vless_reality()
 }
 
 //============================================================================
@@ -1009,6 +1245,79 @@ mod tests {
         assert_eq!(Protocol::AnyTls.default_tag(), "anytls-in");
         assert_eq!(Protocol::Hysteria2.default_tag(), "hy2-in");
         assert_eq!(Protocol::Tuic.default_tag(), "tuic-in");
+        assert_eq!(Protocol::VlessReality.default_tag(), "vless-reality-in");
+    }
+
+    #[test]
+    fn test_auto_vless_reality() {
+        let result = AutoDefault::vless_reality()
+            .public_ip(test_ip())
+            .port(443)
+            .add_user("user1")
+            .build_vless_reality()
+            .unwrap();
+
+        assert_eq!(result.info.port, 443);
+        assert_eq!(result.info.users.len(), 1);
+        assert_eq!(result.inbound.inbound_type, "vless");
+        //验证 REALITY 密钥对已生成
+        assert!(!result.private_key.is_empty());
+        assert!(!result.public_key.is_empty());
+        assert!(!result.short_id.is_empty());
+        // 验证握手服务器默认值
+        assert_eq!(result.handshake_server, "www.microsoft.com");
+        assert_eq!(result.handshake_port, 443);
+    }
+
+    #[test]
+    fn test_vless_reality_custom_handshake() {
+        let result = AutoDefault::vless_reality()
+            .public_ip(test_ip())
+            .port(443)
+            .handshake_server("www.google.com", 443)
+            .server_name("www.google.com")
+            .add_user("user1")
+            .build_vless_reality()
+            .unwrap();
+
+        assert_eq!(result.handshake_server, "www.google.com");
+        assert_eq!(result.handshake_port, 443);
+    }
+
+    #[test]
+    fn test_reality_keypair_generation() {
+        let keypair1 = generate_reality_keypair();
+        let keypair2 = generate_reality_keypair();
+
+        // 每次生成的密钥对应该不同
+        assert_ne!(keypair1.private_key, keypair2.private_key);
+        assert_ne!(keypair1.public_key, keypair2.public_key);
+
+        // 密钥应该是有效的 Base64 编码
+        assert!(!keypair1.private_key.is_empty());
+        assert!(!keypair1.public_key.is_empty());
+    }
+
+    #[test]
+    fn test_short_id_generation() {
+        let short_id = generate_short_id();
+        // 短ID 应该是 8 位十六进制字符
+        assert_eq!(short_id.len(), 8);
+        assert!(short_id.chars().all(|c| c.is_ascii_hexdigit()));
+    }
+
+    #[test]
+    fn test_multi_protocol_with_vless_reality() {
+        let result = MultiProtocolBuilder::new()
+            .public_ip(test_ip())
+            .enable_vless_reality(2096)
+            .add_user("user1")
+            .build()
+            .unwrap();
+
+        assert!(result.vless_reality.is_some());
+        let vless = result.vless_reality.unwrap();
+        assert_eq!(vless.info.port, 2096);
     }
 
     #[test]

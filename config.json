@@ -30,17 +30,17 @@
       "tls": {
         "acme": {
           "domain": [
-            "example.com"
+            "1-2-3-4.sslip.io"
           ]
         },
         "enabled": true,
-        "server_name": "example.com"
+        "server_name": "1-2-3-4.sslip.io"
       },
       "type": "anytls",
       "users": [
         {
           "name": "default",
-          "password": "TDzjInCBosbs8360vZIAQQ=="
+          "password": "uizRmeZhp5SJ2dcSUVqFSg=="
         }
       ]
     },
@@ -51,17 +51,17 @@
       "tls": {
         "acme": {
           "domain": [
-            "example.com"
+            "1-2-3-4.sslip.io"
           ]
         },
         "enabled": true,
-        "server_name": "example.com"
+        "server_name": "1-2-3-4.sslip.io"
       },
       "type": "hysteria2",
       "users": [
         {
           "name": "default",
-          "password": "TDzjInCBosbs8360vZIAQQ=="
+          "password": "uizRmeZhp5SJ2dcSUVqFSg=="
         }
       ]
     },
@@ -73,18 +73,46 @@
       "tls": {
         "acme": {
           "domain": [
-            "example.com"
+            "1-2-3-4.sslip.io"
           ]
         },
         "enabled": true,
-        "server_name": "example.com"
+        "server_name": "1-2-3-4.sslip.io"
       },
       "type": "tuic",
       "users": [
         {
           "name": "default",
-          "password": "TDzjInCBosbs8360vZIAQQ==",
-          "uuid": "33eba7b1-4a9b-4979-a139-c69cb0af33d7"
+          "password": "uizRmeZhp5SJ2dcSUVqFSg==",
+          "uuid": "bf31832a-d631-4ae8-9689-2940511b0fd5"
+        }
+      ]
+    },
+    {
+      "listen": "::",
+      "listen_port": 2096,
+      "tag": "vless-reality-in",
+      "tls": {
+        "enabled": true,
+        "reality": {
+          "enabled": true,
+          "handshake": {
+            "server": "www.microsoft.com",
+            "server_port": 443
+          },
+          "private_key": "4FVY9POf-vXjyVSSN_mdi4YHqVT2g8he008lgU1po3E",
+          "short_id": [
+            "b1320fbc"
+          ]
+        },
+        "server_name": "www.microsoft.com"
+      },
+      "type": "vless",
+      "users": [
+        {
+          "flow": "xtls-rprx-vision",
+          "name": "default",
+          "uuid": "bf31832a-d631-4ae8-9689-2940511b0fd5"
         }
       ]
     }

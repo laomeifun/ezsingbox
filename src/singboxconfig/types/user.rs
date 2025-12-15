@@ -4,6 +4,18 @@ use serde::{Deserialize, Serialize};
 // 通用用户类型
 //============================================================================
 
+//============================================================================
+// VLESS Flow 类型
+// ============================================================================
+
+/// VLESS 子协议流类型
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum VlessFlow {
+    /// XTLS Vision 流控
+    XtlsRprxVision,
+}
+
 /// 带密码的用户
 /// 用于 AnyTLS、Trojan、Shadowsocks 等协议
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]
@@ -82,6 +94,68 @@ impl Default for VMessUser {
             name: String::new(),
             uuid: String::new(),
             alter_id: 0,
+        }
+    }
+}
+
+// ============================================================================
+// VLESS 用户类型
+// ============================================================================
+
+/// VLESS 用户
+/// VLESS 协议使用 UUID 进行身份验证
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]
+pub struct VlessUser {
+    /// 用户名
+    pub name: String,
+
+    /// 用户 UUID（必填）
+    pub uuid: String,
+
+    /// VLESS 子协议
+    /// 可用值: xtls-rprx-vision
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub flow: Option<VlessFlow>,
+}
+
+impl VlessUser {
+    /// 创建新的 VLESS 用户
+    pub fn new(name: impl Into<String>, uuid: impl Into<String>) -> Self {
+        Self {
+            name: name.into(),
+            uuid: uuid.into(),
+            flow: None,
+        }
+    }
+
+    /// 创建带flow 的 VLESS 用户
+    pub fn with_flow(name: impl Into<String>, uuid: impl Into<String>, flow: VlessFlow) -> Self {
+        Self {
+            name: name.into(),
+            uuid: uuid.into(),
+            flow: Some(flow),
+        }
+    }
+
+    /// 设置 flow
+    pub fn set_flow(mut self, flow: VlessFlow) -> Self {
+        self.flow = Some(flow);
+        self
+    }
+
+    /// 设置 XTLS Vision flow
+    pub fn with_xtls_vision(mut self) -> Self {
+        self.flow = Some(VlessFlow::XtlsRprxVision);
+        self
+    }
+}
+
+impl Default for VlessUser {
+    fn default() -> Self {
+        Self {
+            name: String::new(),
+            uuid: String::new(),
+            flow: None,
         }
     }
 }
@@ -270,5 +344,77 @@ mod tests {
         assert!(json.contains("\"server\":\"example.com\""));
         assert!(json.contains("\"server_port\":8080"));
         assert!(json.contains("\"password\":\"password\""));
+    }
+
+    #[test]
+    fn test_vless_user_new() {
+        let user = VlessUser::new("sekai", "bf000d23-0752-40b4-affe-68f7707a9661");
+        assert_eq!(user.name, "sekai");
+        assert_eq!(user.uuid, "bf000d23-0752-40b4-affe-68f7707a9661");
+        assert!(user.flow.is_none());
+    }
+
+    #[test]
+    fn test_vless_user_with_flow() {
+        let user = VlessUser::with_flow(
+            "sekai",
+            "bf000d23-0752-40b4-affe-68f7707a9661",
+            VlessFlow::XtlsRprxVision,
+        );
+        assert_eq!(user.flow, Some(VlessFlow::XtlsRprxVision));
+    }
+
+    #[test]
+    fn test_vless_user_with_xtls_vision() {
+        let user =
+            VlessUser::new("sekai", "bf000d23-0752-40b4-affe-68f7707a9661").with_xtls_vision();
+        assert_eq!(user.flow, Some(VlessFlow::XtlsRprxVision));
+    }
+
+    #[test]
+    fn test_vless_user_serialize() {
+        let user = VlessUser::new("sekai", "bf000d23-0752-40b4-affe-68f7707a9661");
+        let json = serde_json::to_string(&user).unwrap();
+        assert!(json.contains("\"name\":\"sekai\""));
+        assert!(json.contains("\"uuid\":\"bf000d23-0752-40b4-affe-68f7707a9661\""));
+        // flow为 None 时不应该序列化
+        assert!(!json.contains("flow"));
+    }
+
+    #[test]
+    fn test_vless_user_serialize_with_flow() {
+        let user =
+            VlessUser::new("sekai", "bf000d23-0752-40b4-affe-68f7707a9661").with_xtls_vision();
+        let json = serde_json::to_string(&user).unwrap();
+        assert!(json.contains("\"flow\":\"xtls-rprx-vision\""));
+    }
+
+    #[test]
+    fn test_vless_user_deserialize() {
+        let json = r#"{"name":"sekai","uuid":"bf000d23-0752-40b4-affe-68f7707a9661"}"#;
+        let user: VlessUser = serde_json::from_str(json).unwrap();
+        assert_eq!(user.name, "sekai");
+        assert_eq!(user.uuid, "bf000d23-0752-40b4-affe-68f7707a9661");
+        assert!(user.flow.is_none());
+    }
+
+    #[test]
+    fn test_vless_user_deserialize_with_flow() {
+        let json = r#"{"name":"sekai","uuid":"bf000d23-0752-40b4-affe-68f7707a9661","flow":"xtls-rprx-vision"}"#;
+        let user: VlessUser = serde_json::from_str(json).unwrap();
+        assert_eq!(user.flow, Some(VlessFlow::XtlsRprxVision));
+    }
+
+    #[test]
+    fn test_vless_flow_serialize() {
+        let flow = VlessFlow::XtlsRprxVision;
+        let json = serde_json::to_string(&flow).unwrap();
+        assert_eq!(json, "\"xtls-rprx-vision\"");
+    }
+
+    #[test]
+    fn test_vless_flow_deserialize() {
+        let flow: VlessFlow = serde_json::from_str("\"xtls-rprx-vision\"").unwrap();
+        assert_eq!(flow, VlessFlow::XtlsRprxVision);
     }
 }

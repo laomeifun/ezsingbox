@@ -1,6 +1,6 @@
 use std::net::IpAddr;
 
-use crate::singboxconfig::inbound::{Hysteria2Inbound, Hysteria2Obfs};
+use crate::singboxconfig::inbound::{Hysteria2Inbound};
 use crate::singboxconfig::shared::{AcmeConfig, InboundTlsConfig};
 use crate::singboxconfig::types::UserWithPassword;
 

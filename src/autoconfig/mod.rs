@@ -7,6 +7,7 @@ mod autoByDefault;
 mod autoanytls;
 mod autohy2;
 mod autotuic;
+mod autovless;
 pub mod tools;
 
 // 从 autoanytls 模块导出
@@ -24,6 +25,12 @@ pub use autohy2::{
 pub use autotuic::{
     AutoTuicBuilder, AutoTuicConfig, AutoTuicError, AutoTuicResult, TuicConnectionInfo,
     TuicUserConfig,
+};
+
+// 从 autovless 模块导出
+pub use autovless::{
+    AutoVlessBuilder, AutoVlessConfig, AutoVlessError, AutoVlessResult, VlessConnectionInfo,
+    VlessUserConfig,
 };
 
 // 从 autoByDefault 模块导出
