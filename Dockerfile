@@ -6,17 +6,28 @@ FROM rust:1.85-alpine AS builder
 WORKDIR /work
 
 RUN apk add --no-cache build-base musl-dev pkgconfig
-RUN rustup target add x86_64-unknown-linux-musl
+
+# Buildx will set TARGETARCH for multi-arch builds.
+ARG TARGETARCH
+RUN case "$TARGETARCH" in \
+			amd64) echo x86_64-unknown-linux-musl > /tmp/rust_target ;; \
+			arm64) echo aarch64-unknown-linux-musl > /tmp/rust_target ;; \
+			*) echo "Unsupported TARGETARCH=$TARGETARCH" >&2; exit 1 ;; \
+		esac
+RUN rustup target add "$(cat /tmp/rust_target)"
 
 COPY Cargo.toml Cargo.lock* ./
 COPY src ./src
 
-RUN cargo build --release --target x86_64-unknown-linux-musl
+RUN cargo build --release --target "$(cat /tmp/rust_target)"
+
+RUN mkdir -p /out \
+	&& cp "/work/target/$(cat /tmp/rust_target)/release/ezsingbox" /out/ezsingbox
 
 # Final image: official sing-box image
 FROM ghcr.io/sagernet/sing-box:latest
 
-COPY --from=builder /work/target/x86_64-unknown-linux-musl/release/ezsingbox /usr/local/bin/ezsingbox
+COPY --from=builder /out/ezsingbox /usr/local/bin/ezsingbox
 
 ENV EZ_CONFIG_PATH=/etc/sing-box/config.json
 ENV EZ_LOG_LEVEL=info

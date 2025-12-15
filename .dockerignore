@@ -1,3 +1,8 @@
-target
-.git
-.github
+target/
+.git/
+.github/
+
+*.log
+**/*.log
+
+.DS_Store
