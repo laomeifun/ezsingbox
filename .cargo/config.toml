@@ -1,0 +1,4 @@
+# 优化配置（不强制静态编译）
+[target.x86_64-unknown-linux-gnu]
+rustflags = ["-C", "link-arg=-s"]  # 链接时剥离符号
+
