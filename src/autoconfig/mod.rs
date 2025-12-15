@@ -3,11 +3,18 @@
 //! 此模块提供自动化生成 sing-box 配置的功能
 
 mod autoanytls;
+mod autohy2;
 pub mod tools;
 
 // 从 autoanytls 模块导出
 pub use autoanytls::{
     AutoAnyTlsBuilder, AutoAnyTlsConfig, AutoAnyTlsError, AutoAnyTlsResult, ConnectionInfo,
+};
+
+// 从 autohy2 模块导出
+pub use autohy2::{
+    AutoHysteria2Builder, AutoHysteria2Config, AutoHysteria2Error, AutoHysteria2Result,
+    Hysteria2ConnectionInfo,
 };
 
 // 从 tools 模块重新导出常用功能
