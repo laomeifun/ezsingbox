@@ -44,6 +44,9 @@ pub fn build_from_env() -> Result<BuildResult, String> {
     if let Some(domain) = env_string("EZ_DOMAIN") {
         builder = builder.domain(domain);
     }
+    if let Some(email) = env_string("EZ_ACME_EMAIL") {
+        builder = builder.acme_email(email);
+    }
 
     if enable_anytls {
         builder = builder.enable_anytls(anytls_port);

@@ -43,6 +43,12 @@ pub fn fallback_port(index: usize) -> u16 {
     DEFAULT_PORTS.get(index).copied().unwrap_or(443)
 }
 
+/// 生成随机邮箱地址
+fn generate_random_email() -> String {
+    let random_part = generate_hex_string(8);
+    format!("{}@acme.invalid", random_part)
+}
+
 //============================================================================
 // 协议类型
 //============================================================================
@@ -337,6 +343,8 @@ pub struct AutoDefault {
     reality_handshake_port: Option<u16>,
     /// VLESS Reality 特有：服务器名称（SNI）
     reality_server_name: Option<String>,
+    /// ACME 邮箱地址
+    acme_email: Option<String>,
 }
 
 impl AutoDefault {
@@ -377,6 +385,7 @@ impl AutoDefault {
             reality_handshake_server: None,
             reality_handshake_port: None,
             reality_server_name: None,
+            acme_email: None,
         }
     }
 
@@ -453,6 +462,12 @@ impl AutoDefault {
         self
     }
 
+    /// 设置 ACME 邮箱地址
+    pub fn acme_email(mut self, email: impl Into<String>) -> Self {
+        self.acme_email = Some(email.into());
+        self
+    }
+
     //========== Hysteria2 特有方法 ==========
 
     /// 设置带宽限制（Hysteria2）
@@ -523,10 +538,12 @@ impl AutoDefault {
     }
 
     /// 生成 TLS 配置
-    fn generate_tls_config(&self, domain: &str) -> InboundTlsConfig {
+    fn generate_tls_config(&self, domain: &str, email: Option<String>) -> InboundTlsConfig {
         let acme = AcmeConfig {
             domain: Some(vec![domain.to_string()]),
-            email: None,
+            email: Some(email.unwrap_or_else(generate_random_email)),
+            // 设置共享的数据目录，让所有入站共享同一个证书
+            data_directory: Some("./acme".to_string()),
             ..Default::default()
         };
 
@@ -566,7 +583,7 @@ impl AutoDefault {
             .clone()
             .unwrap_or_else(|| Protocol::AnyTls.default_tag().to_string());
         let users = self.generate_users();
-        let tls = self.generate_tls_config(&domain);
+        let tls = self.generate_tls_config(&domain, self.acme_email.clone());
 
         let mut inbound = AnyTlsInbound::new(&tag)
             .with_listen("::")
@@ -601,7 +618,7 @@ impl AutoDefault {
             .clone()
             .unwrap_or_else(|| Protocol::Hysteria2.default_tag().to_string());
         let users = self.generate_users();
-        let tls = self.generate_tls_config(&domain);
+        let tls = self.generate_tls_config(&domain, self.acme_email.clone());
 
         let mut inbound = Hysteria2Inbound::new(&tag)
             .with_listen("::")
@@ -656,7 +673,7 @@ impl AutoDefault {
             .clone()
             .unwrap_or_else(|| Protocol::Tuic.default_tag().to_string());
         let users = self.generate_users();
-        let tls = self.generate_tls_config(&domain);
+        let tls = self.generate_tls_config(&domain, self.acme_email.clone());
 
         let cc = self.congestion_control.unwrap_or(CongestionControl::Cubic);
 
@@ -841,6 +858,8 @@ pub struct MultiProtocolBuilder {
     tuic_cc: Option<CongestionControl>,
     /// VLESS Reality 握手服务器
     vless_handshake: Option<(String, u16)>,
+    /// ACME 邮箱地址
+    acme_email: Option<String>,
 }
 
 impl MultiProtocolBuilder {
@@ -858,6 +877,7 @@ impl MultiProtocolBuilder {
             hy2_obfs: false,
             tuic_cc: None,
             vless_handshake: None,
+            acme_email: None,
         }
     }
 
@@ -900,6 +920,12 @@ impl MultiProtocolBuilder {
     /// 设置 VLESS Reality 握手服务器
     pub fn vless_handshake(mut self, server: impl Into<String>, port: u16) -> Self {
         self.vless_handshake = Some((server.into(), port));
+        self
+    }
+
+    /// 设置 ACME 邮箱地址
+    pub fn acme_email(mut self, email: impl Into<String>) -> Self {
+        self.acme_email = Some(email.into());
         self
     }
 
@@ -972,6 +998,9 @@ impl MultiProtocolBuilder {
                 .public_ip(public_ip)
                 .domain(domain.clone())
                 .port(port);
+            if let Some(ref email) = self.acme_email {
+                builder = builder.acme_email(email);
+            }
             for user in &users {
                 builder = builder.add_user_with_password(&user.name, &user.password);
             }
@@ -1006,6 +1035,9 @@ impl MultiProtocolBuilder {
                 .public_ip(public_ip)
                 .domain(domain.clone())
                 .port(port);
+            if let Some(ref email) = self.acme_email {
+                builder = builder.acme_email(email);
+            }
             for user in &users {
                 if let Some(ref uuid) = user.uuid {
                     builder = builder.add_tuic_user(&user.name, uuid, &user.password);
