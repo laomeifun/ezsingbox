@@ -1,0 +1,107 @@
+{
+  "log": {
+    "level": "info",
+    "timestamp": true
+  },
+  "dns": {
+    "final": "cloudflare",
+    "servers": [
+      {
+        "path": "/dns-query",
+        "server": "1.1.1.1",
+        "server_port": 443,
+        "tag": "cloudflare",
+        "type": "https"
+      },
+      {
+        "path": "/dns-query",
+        "server": "8.8.8.8",
+        "server_port": 443,
+        "tag": "google",
+        "type": "https"
+      }
+    ]
+  },
+  "inbounds": [
+    {
+      "listen": "::",
+      "listen_port": 443,
+      "tag": "anytls-in",
+      "tls": {
+        "acme": {
+          "domain": [
+            "example.com"
+          ]
+        },
+        "enabled": true,
+        "server_name": "example.com"
+      },
+      "type": "anytls",
+      "users": [
+        {
+          "name": "default",
+          "password": "TDzjInCBosbs8360vZIAQQ=="
+        }
+      ]
+    },
+    {
+      "listen": "::",
+      "listen_port": 2053,
+      "tag": "hy2-in",
+      "tls": {
+        "acme": {
+          "domain": [
+            "example.com"
+          ]
+        },
+        "enabled": true,
+        "server_name": "example.com"
+      },
+      "type": "hysteria2",
+      "users": [
+        {
+          "name": "default",
+          "password": "TDzjInCBosbs8360vZIAQQ=="
+        }
+      ]
+    },
+    {
+      "congestion_control": "cubic",
+      "listen": "::",
+      "listen_port": 2083,
+      "tag": "tuic-in",
+      "tls": {
+        "acme": {
+          "domain": [
+            "example.com"
+          ]
+        },
+        "enabled": true,
+        "server_name": "example.com"
+      },
+      "type": "tuic",
+      "users": [
+        {
+          "name": "default",
+          "password": "TDzjInCBosbs8360vZIAQQ==",
+          "uuid": "33eba7b1-4a9b-4979-a139-c69cb0af33d7"
+        }
+      ]
+    }
+  ],
+  "outbounds": [
+    {
+      "tag": "direct",
+      "type": "direct"
+    },
+    {
+      "tag": "block",
+      "type": "block"
+    }
+  ],
+  "route": {
+    "default_domain_resolver": "cloudflare",
+    "final": "direct",
+    "rules": []
+  }
+}

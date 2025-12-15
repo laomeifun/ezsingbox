@@ -6,3 +6,5 @@ pub mod inbound;
 pub mod outbound;
 pub mod shared;
 pub mod types;
+
+pub mod full;

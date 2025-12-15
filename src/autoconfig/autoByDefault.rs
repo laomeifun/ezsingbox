@@ -245,6 +245,8 @@ pub struct AutoDefault {
     protocol: Protocol,
     /// 指定的公网 IP（如果不指定则自动获取）
     public_ip: Option<IpAddr>,
+    /// 指定域名（不指定则使用基于公网 IP 的 sslip.io）
+    domain: Option<String>,
     /// 指定的端口（如果不指定则使用默认端口）
     port: Option<u16>,
     /// 用户列表
@@ -284,6 +286,7 @@ impl AutoDefault {
         Self {
             protocol,
             public_ip: None,
+            domain: None,
             port: None,
             users: Vec::new(),
             tag: None,
@@ -298,6 +301,12 @@ impl AutoDefault {
     /// 设置公网 IP（不设置则自动获取）
     pub fn public_ip(mut self, ip: IpAddr) -> Self {
         self.public_ip = Some(ip);
+        self
+    }
+
+    /// 设置域名（不指定则使用基于公网 IP 的 sslip.io）
+    pub fn domain(mut self, domain: impl Into<String>) -> Self {
+        self.domain = Some(domain.into());
         self
     }
 
@@ -447,7 +456,10 @@ impl AutoDefault {
     /// 构建 AnyTLS 配置
     pub fn build_anytls(self) -> Result<AnyTlsAutoResult, AutoDefaultError> {
         let public_ip = self.get_public_ip()?;
-        let domain = generate_sslip_domain(&public_ip);
+        let domain = self
+            .domain
+            .clone()
+            .unwrap_or_else(|| generate_sslip_domain(&public_ip));
         let port = self.port.unwrap_or_else(default_port);
         let tag = self
             .tag
@@ -479,7 +491,10 @@ impl AutoDefault {
     /// 构建 Hysteria2 配置
     pub fn build_hysteria2(self) -> Result<Hysteria2AutoResult, AutoDefaultError> {
         let public_ip = self.get_public_ip()?;
-        let domain = generate_sslip_domain(&public_ip);
+        let domain = self
+            .domain
+            .clone()
+            .unwrap_or_else(|| generate_sslip_domain(&public_ip));
         let port = self.port.unwrap_or_else(default_port);
         let tag = self
             .tag
@@ -531,7 +546,10 @@ impl AutoDefault {
     /// 构建 TUIC 配置
     pub fn build_tuic(self) -> Result<TuicAutoResult, AutoDefaultError> {
         let public_ip = self.get_public_ip()?;
-        let domain = generate_sslip_domain(&public_ip);
+        let domain = self
+            .domain
+            .clone()
+            .unwrap_or_else(|| generate_sslip_domain(&public_ip));
         let port = self.port.unwrap_or_else(default_port);
         let tag = self
             .tag
@@ -610,6 +628,8 @@ pub enum AutoBuildResult {
 pub struct MultiProtocolBuilder {
     /// 公网 IP
     public_ip: Option<IpAddr>,
+    /// 指定域名（不指定则使用基于公网 IP 的 sslip.io）
+    domain: Option<String>,
     /// 用户列表
     users: Vec<GeneratedUser>,
     /// AnyTLS 端口（None表示不启用）
@@ -631,6 +651,7 @@ impl MultiProtocolBuilder {
     pub fn new() -> Self {
         Self {
             public_ip: None,
+            domain: None,
             users: Vec::new(),
             anytls_port: None,
             hysteria2_port: None,
@@ -644,6 +665,12 @@ impl MultiProtocolBuilder {
     /// 设置公网 IP
     pub fn public_ip(mut self, ip: IpAddr) -> Self {
         self.public_ip = Some(ip);
+        self
+    }
+
+    /// 设置域名（不指定则使用基于公网 IP 的 sslip.io）
+    pub fn domain(mut self, domain: impl Into<String>) -> Self {
+        self.domain = Some(domain.into());
         self
     }
 
@@ -717,7 +744,10 @@ impl MultiProtocolBuilder {
             get_public_ip()?
         };
 
-        let domain = generate_sslip_domain(&public_ip);
+        let domain = self
+            .domain
+            .clone()
+            .unwrap_or_else(|| generate_sslip_domain(&public_ip));
         let users = if self.users.is_empty() {
             vec![GeneratedUser::with_uuid("default")]
         } else {
@@ -726,7 +756,10 @@ impl MultiProtocolBuilder {
 
         //构建 AnyTLS
         let anytls = if let Some(port) = self.anytls_port {
-            let mut builder = AutoDefault::anytls().public_ip(public_ip).port(port);
+            let mut builder = AutoDefault::anytls()
+                .public_ip(public_ip)
+                .domain(domain.clone())
+                .port(port);
             for user in &users {
                 builder = builder.add_user_with_password(&user.name, &user.password);
             }
@@ -737,7 +770,10 @@ impl MultiProtocolBuilder {
 
         // 构建 Hysteria2
         let hysteria2 = if let Some(port) = self.hysteria2_port {
-            let mut builder = AutoDefault::hysteria2().public_ip(public_ip).port(port);
+            let mut builder = AutoDefault::hysteria2()
+                .public_ip(public_ip)
+                .domain(domain.clone())
+                .port(port);
             for user in &users {
                 builder = builder.add_user_with_password(&user.name, &user.password);
             }
@@ -754,7 +790,10 @@ impl MultiProtocolBuilder {
 
         // 构建 TUIC
         let tuic = if let Some(port) = self.tuic_port {
-            let mut builder = AutoDefault::tuic().public_ip(public_ip).port(port);
+            let mut builder = AutoDefault::tuic()
+                .public_ip(public_ip)
+                .domain(domain.clone())
+                .port(port);
             for user in &users {
                 if let Some(ref uuid) = user.uuid {
                     builder = builder.add_tuic_user(&user.name, uuid, &user.password);

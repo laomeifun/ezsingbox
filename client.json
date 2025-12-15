@@ -1,0 +1,59 @@
+{
+  "log": {
+    "level": "info",
+    "timestamp": true
+  },
+  "dns": {
+    "final": "cloudflare",
+    "servers": [
+      {
+        "path": "/dns-query",
+        "server": "1.1.1.1",
+        "server_port": 443,
+        "tag": "cloudflare",
+        "type": "https"
+      },
+      {
+        "path": "/dns-query",
+        "server": "8.8.8.8",
+        "server_port": 443,
+        "tag": "google",
+        "type": "https"
+      }
+    ]
+  },
+  "inbounds": [
+    {
+      "listen": "127.0.0.1",
+      "listen_port": 7890,
+      "tag": "mixed-in",
+      "type": "mixed"
+    }
+  ],
+  "outbounds": [
+    {
+      "password": "BdQ4h0L/RFqA2OAKhR/PyA==",
+      "server": "example.com",
+      "server_port": 443,
+      "tag": "proxy",
+      "tls": {
+        "enabled": true,
+        "server_name": "example.com"
+      },
+      "type": "anytls"
+    },
+    {
+      "tag": "direct",
+      "type": "direct"
+    },
+    {
+      "tag": "block",
+      "type": "block"
+    }
+  ],
+  "route": {
+    "default_domain_resolver": "cloudflare",
+    "final": "proxy",
+    "rules": []
+  }
+}
