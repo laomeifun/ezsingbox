@@ -4,13 +4,20 @@
 
 mod dial;
 mod listen;
+mod multiplex;
 mod tls;
+mod v2ray;
 
 pub use dial::{DialFields, DomainResolver, DomainResolverConfig};
 pub use listen::ListenFields;
+pub use multiplex::{MultiplexInbound, MultiplexOutbound, MultiplexProtocol, TcpBrutal};
 pub use tls::{
     AcmeConfig, AcmeExternalAccount, AcmeProvider, AcmeProviderPreset, CipherSuite,
     ClientAuthentication, CurvePreference, EchInboundConfig, EchOutboundConfig, InboundTlsConfig,
     OutboundTlsConfig, RealityHandshake, RealityInboundConfig, RealityOutboundConfig, TlsVersion,
     UtlsConfig, UtlsFingerprint,
+};
+pub use v2ray::{
+    GrpcTransport, HttpTransport, HttpUpgradeTransport, QuicTransport, V2RayTransport,
+    WebSocketTransport,
 };
